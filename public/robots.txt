@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://milakya.vercel.app/sitemap.xml
