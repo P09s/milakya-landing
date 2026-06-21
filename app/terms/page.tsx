@@ -34,6 +34,7 @@ body { background: var(--c); font-family: 'Inter', sans-serif; color: var(--b); 
 .pp-logo {
   font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 20px;
   color: var(--t); letter-spacing: -0.5px; text-decoration: none;
+  display: flex; align-items: center;   /* ← add these two */
 }
 .pp-logo em { color: var(--b); font-style: normal; }
 .pp-back {
@@ -91,7 +92,17 @@ export default function TermsPage() {
       <style dangerouslySetInnerHTML={{ __html: STYLES }} />
 
       <nav className="pp-nav">
-        <a href="/" className="pp-logo">Mila<em>Kya</em></a>
+      <a href="/" className="pp-logo" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <img
+          src="/icon.webp"
+          alt=""
+          width={28}
+          height={28}
+          decoding="async"
+          style={{ width: 28, height: 28, borderRadius: 7, display: 'block' }}
+        />
+        <span>Mila<em>Kya</em></span>
+      </a>
         <a href="/" className="pp-back">← Back to home</a>
       </nav>
 

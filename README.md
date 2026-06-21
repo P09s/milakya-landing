@@ -47,6 +47,6 @@ That's the only change needed.
 ## Assets needed in `/public`
 
 Copy these from your main app's `/public` folder:
-- `og-image.png` (1200×630) — for WhatsApp/LinkedIn/Instagram previews
-- `icon-192.png` — favicon fallback
+- `og-image.webp` (1200×630) — for WhatsApp/LinkedIn/Instagram previews
+- `icon-192.webp` — favicon fallback
 - `favicon.ico`

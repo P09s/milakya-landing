@@ -1,6 +1,21 @@
 import type { Metadata } from 'next';
 import Script from 'next/script';
+import { Outfit, Inter } from 'next/font/google';
 import './globals.css';
+
+const outfit = Outfit({
+  subsets: ['latin'],
+  variable: '--font-outfit',
+  weight: ['300', '400', '600', '700', '900'],
+  display: 'swap',
+});
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  weight: ['400', '500', '600'],
+  display: 'swap',
+});
 
 // ── Update these two constants when your domain changes ──────────────────────
 const LANDING_URL = 'https://milakya.vercel.app';  // this project's URL
@@ -50,11 +65,11 @@ export const metadata: Metadata = {
       'Track your belongings across ghar, PG, sasural, maika. AI scan, Hinglish, free. Built for India\'s multi-home generation.',
     images: [
       {
-        url: '/og-image.png',
+        url: '/og-image.webp',
         width: 1200,
         height: 630,
         alt: 'MilaKya — Apna Saman, Apni Jagah',
-        type: 'image/png',
+        type: 'image/webp',
       },
     ],
   },
@@ -65,7 +80,7 @@ export const metadata: Metadata = {
     title: 'MilaKya — Apna Saman, Apni Jagah',
     description:
       'Track your belongings across ghar, PG, sasural, maika. AI scan, Hinglish, free.',
-    images: ['/og-image.png'],
+    images: ['/og-image.webp'],
     creator: '@milakya',
   },
 
@@ -186,12 +201,8 @@ const jsonLd = {
 // ── Root layout ───────────────────────────────────────────────────────────────
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-IN">
+    <html lang="en-IN" className={`${outfit.variable} ${inter.variable}`}>
       <head>
-        {/* Preconnect to Google Fonts CDN for faster font load */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-
         {/* Favicon chain */}
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
