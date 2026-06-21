@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Download,
   MapPin,
@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Building2,
   Shirt,
+  Mail,
 } from 'lucide-react';
 
 const APP_URL     = 'https://mila-kya.vercel.app';
@@ -197,8 +198,11 @@ html { scroll-behavior: smooth; }
   position: absolute; top: 7px; left: 50%; transform: translateX(-50%);
   width: 56px; height: 9px; background: #1A0E08; border-radius: 8px; z-index: 3;
 }
-.mk-ph1 { left: 12px; top: 32px; transform: rotate(-6deg); }
-.mk-ph2 { right: 12px; top: 4px;  transform: rotate(4.5deg); }
+/* Scroll-scrubbed: the JS in HeroPhones sets transform/opacity inline on every
+   scroll tick, tracking distance from the top of the page. These are just the
+   resting values used before JS hydrates (and the prefers-reduced-motion case). */
+.mk-ph1 { left: 12px; top: 32px; transform: translateX(-220px) rotate(-6deg); opacity: 0.25; }
+.mk-ph2 { right: 12px; top: 4px;  transform: translateX(220px) rotate(4.5deg); opacity: 0.25; }
 
 @media (min-width: 641px) {
   .mk-phones { max-width: 450px; height: 510px; }
@@ -240,22 +244,58 @@ html { scroll-behavior: smooth; }
   color: #fff; margin-bottom: 8px;
 }
 .mk-prob-text { font-size: 13.5px; line-height: 1.6; color: rgba(250,246,240,0.48); }
-.mk-prob-hint {
-  display: none; text-align: center; font-size: 12px;
-  color: rgba(250,246,240,0.22); padding-top: 14px; letter-spacing: 0.04em;
-}
+
+/* Mobile-only full-bleed story stack — replaces the carousel below 640px.
+   Desktop keeps the original .mk-prob-grid untouched. */
+.mk-prob-stories { display: none; }
 
 @media (max-width: 640px) {
-  .mk-prob { padding: 72px 0; }
-  .mk-prob > .mk-wrap > *:not(.mk-prob-grid):not(.mk-prob-hint) { padding: 0 18px; }
-  .mk-prob-grid {
-    display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory;
-    -webkit-overflow-scrolling: touch; scrollbar-width: none;
-    padding: 4px 18px 6px; margin-top: 40px;
+  .mk-prob { padding: 64px 0 72px; }
+  .mk-prob > .mk-wrap > *:not(.mk-prob-stories) { padding: 0 20px; }
+
+  .mk-prob-grid { display: none; }
+
+  .mk-prob-stories {
+    display: flex; flex-direction: column; gap: 0;
+    margin-top: 40px;
   }
-  .mk-prob-grid::-webkit-scrollbar { display: none; }
-  .mk-prob-card { flex: 0 0 80%; scroll-snap-align: center; scroll-snap-stop: always; }
-  .mk-prob-hint { display: block; }
+
+  .mk-story-card {
+    position: relative;
+    padding: 28px 20px 28px 56px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .mk-story-card:last-child { border-bottom: 1px solid rgba(255,255,255,0.06); }
+  .mk-story-card:nth-child(even) { background: rgba(200,96,58,0.03); }
+
+  /* Vertical timeline line */
+  .mk-story-card::before {
+    content: '';
+    position: absolute; left: 27px; top: 0; bottom: 0; width: 1px;
+    background: linear-gradient(to bottom,
+      transparent 0%,
+      rgba(200,96,58,0.3) 20%,
+      rgba(200,96,58,0.3) 80%,
+      transparent 100%
+    );
+  }
+
+  /* Icon bubble sitting on the timeline */
+  .mk-story-bubble {
+    position: absolute; left: 14px; top: 28px;
+    width: 27px; height: 27px; border-radius: 50%;
+    background: rgba(200,96,58,0.18); border: 1px solid rgba(200,96,58,0.3);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--t); z-index: 1;
+  }
+
+  .mk-story-title {
+    font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 800;
+    color: #fff; margin-bottom: 6px; letter-spacing: -0.3px;
+  }
+  .mk-story-text {
+    font-size: 13.5px; line-height: 1.65; color: rgba(250,246,240,0.48);
+  }
 }
 
 /* ── HOW IT WORKS ── */
@@ -329,6 +369,33 @@ html { scroll-behavior: smooth; }
   padding: 16px; background: #fff; animation: mkQrPulse 2.6s ease-in-out infinite;
 }
 
+/* CTA phone — rises into view from below once scrolled into the viewport.
+   Desktop-only (the column itself is display:none below 760px). */
+.mk-fcta-phone-frame {
+  width: 340px; background: #1A1A1A;
+  border-radius: 48px 48px 0 0; padding: 10px 10px 0;
+  box-shadow: 0 -24px 80px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.08);
+  position: relative;
+  opacity: 0;
+  transform: translateY(60px);
+  transition: opacity 1.4s cubic-bezier(.16,1,.3,1), transform 1.4s cubic-bezier(.16,1,.3,1);
+}
+.mk-fcta-phone-frame.in-view { opacity: 1; transform: translateY(0); }
+.mk-fcta-dynamic-island {
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+  width: 100px; height: 28px; background: #000; border-radius: 99px; z-index: 3;
+}
+.mk-fcta-screen {
+  width: 100%; border-radius: 40px 40px 0 0; overflow: hidden;
+  background: #fff; display: flex; flex-direction: column;
+  align-items: center; padding: 72px 36px 44px;
+}
+.mk-fcta-screen-label {
+  font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 700;
+  color: #666; letter-spacing: -1px; line-height: 1.15; margin-bottom: 16px;
+  text-align: center;
+}
+
 @media (max-width: 760px) {
   .mk-fcta { padding: 64px 20px 56px; }
   .mk-fcta-grid { grid-template-columns: 1fr; gap: 0; }
@@ -337,8 +404,10 @@ html { scroll-behavior: smooth; }
 }
 
 /* ── FOOTER ── */
-.mk-footer {
-  background: var(--b); padding: 56px 24px 36px;
+.mk-footer { background: var(--b); }
+
+.mk-foot-desktop {
+  padding: 56px 24px 36px;
   font-family: 'Inter', sans-serif;
 }
 .mk-foot-top {
@@ -388,6 +457,65 @@ html { scroll-behavior: smooth; }
 .mk-foot-flag { display: flex; align-items: center; gap: 5px; }
 @media (max-width: 640px) {
   .mk-foot-top { grid-template-columns: 1fr; gap: 32px; }
+}
+
+/* Mobile footer — compact pill-style redesign, swapped in below 640px */
+.mk-foot-mobile { display: none; }
+
+@media (max-width: 640px) {
+  .mk-foot-desktop { display: none; }
+
+  .mk-foot-mobile {
+    display: flex; flex-direction: column;
+    padding: 32px 20px 40px;
+    font-family: 'Inter', sans-serif;
+  }
+
+  .mk-mfoot-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .mk-mfoot-logo {
+    font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 20px;
+    color: var(--t); text-decoration: none;
+  }
+  .mk-mfoot-logo em { color: #fff; font-style: normal; }
+  .mk-mfoot-tagline { font-size: 12px; color: rgba(250,246,240,0.35); margin-bottom: 24px; }
+
+  .mk-mfoot-cta {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--t); color: #fff;
+    border-radius: 14px; padding: 14px;
+    font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 15px;
+    text-decoration: none; margin-bottom: 20px;
+    transition: background 0.2s;
+  }
+  .mk-mfoot-cta:hover { background: var(--td); }
+
+  .mk-mfoot-links { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px; }
+  .mk-mfoot-link {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 7px 13px; border-radius: 100px;
+    border: 1px solid rgba(255,255,255,0.1);
+    font-size: 12px; color: rgba(250,246,240,0.5);
+    text-decoration: none; transition: color 0.2s, border-color 0.2s;
+  }
+  .mk-mfoot-link:hover { color: var(--t); border-color: rgba(200,96,58,0.4); }
+
+  .mk-mfoot-social { display: flex; gap: 10px; margin-bottom: 24px; }
+  .mk-mfoot-sico {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.09);
+    display: flex; align-items: center; justify-content: center;
+    text-decoration: none; transition: background 0.2s, border-color 0.2s;
+  }
+  .mk-mfoot-sico:hover { background: rgba(200,96,58,0.2); border-color: rgba(200,96,58,0.4); }
+  .mk-mfoot-sico svg { width: 15px; height: 15px; fill: rgba(250,246,240,0.55); }
+  .mk-mfoot-sico:hover svg { fill: var(--t); }
+
+  .mk-mfoot-divider { height: 1px; background: rgba(255,255,255,0.07); margin-bottom: 16px; }
+
+  .mk-mfoot-bottom {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; color: rgba(250,246,240,0.24);
+  }
 }
 
 /* ── REAL PHONE SCREENSHOTS ── */
@@ -474,9 +602,6 @@ html { scroll-behavior: smooth; }
   transform: translateY(-3px);
   box-shadow: 0 14px 36px rgba(200,96,58,0.1);
   border-color: rgba(200,96,58,0.2);
-}
-.mk-hub-card:focus-visible {
-  outline: 2px solid var(--t); outline-offset: 2px;
 }
 .mk-hub-card.active {
   border-color: var(--t);
@@ -598,19 +723,6 @@ html { scroll-behavior: smooth; }
 }
 
 /* ─────────────── MOBILE / TABLET (≤ 900px) ─────────────── */
-/*
-  Key fixes vs. the original:
-
-  1. The phone sticks at the top of the viewport (below the nav).
-     Its background gradient is opaque so cards CANNOT bleed through.
-
-  2. An IntersectionObserver (set up in JS) auto-switches the phone
-     screen as each card scrolls into the middle of the viewport.
-     The card that triggers the change also gets the .active class.
-
-  3. NO overflow: hidden on the section — cards need to scroll freely.
-     Instead we use a backdrop paint trick on the sticky wrapper.
-*/
 @media (max-width: 900px) {
   .mk-feat-hub {
     display: flex;
@@ -716,6 +828,9 @@ html { scroll-behavior: smooth; }
   .js-rev-ready .rev, .js-rev-ready .rev.in { opacity: 1; transform: none; transition: none; }
   .mk-doodle, .hero-in, .mk-fcta-qrbox { animation: none; }
   .mk-hub-img-fade { animation: none; }
+  .mk-fcta-phone-frame { opacity: 1; transform: none; transition: none; }
+  .mk-ph1 { opacity: 1; transform: rotate(-6deg); transition: none; }
+  .mk-ph2 { opacity: 1; transform: rotate(4.5deg); transition: none; }
 }
 `;
 
@@ -862,57 +977,184 @@ function MkCurve({ bg, fill, flip }: { bg: string; fill: string; flip?: boolean 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Showcase — mobile auto-swipes through screens while in view; desktop is
+// untouched and keeps the original manual horizontal-swipe behaviour.
+// ─────────────────────────────────────────────────────────────────────────────
+function Showcase() {
+  const stripRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const indexRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pausedRef = useRef(false);
+  const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const startAutoplay = useCallback(() => {
+    if (timerRef.current) return;
+    timerRef.current = setInterval(() => {
+      if (pausedRef.current) return;
+      indexRef.current = (indexRef.current + 1) % SCREENS.length;
+      itemRefs.current[indexRef.current]?.scrollIntoView({
+        behavior: 'smooth', inline: 'center', block: 'nearest',
+      });
+    }, 2200);
+  }, []);
+
+  const stopAutoplay = useCallback(() => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  }, []);
+
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 640px)');
+    if (!mql.matches) return; // desktop: native swipe only, nothing else runs
+
+    const strip = stripRef.current;
+    if (!strip) return;
+
+    let obs: IntersectionObserver | null = null;
+    try {
+      obs = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting) startAutoplay();
+        else stopAutoplay();
+      }, { threshold: 0.4 });
+      obs.observe(strip);
+    } catch {
+      startAutoplay();
+    }
+
+    // Pause while the user is actively swiping, resume shortly after they let go
+    const pause = () => {
+      pausedRef.current = true;
+      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+    };
+    const resume = () => {
+      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+      resumeTimeoutRef.current = setTimeout(() => { pausedRef.current = false; }, 2600);
+    };
+    strip.addEventListener('touchstart', pause, { passive: true });
+    strip.addEventListener('touchend', resume, { passive: true });
+
+    return () => {
+      obs?.disconnect();
+      stopAutoplay();
+      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+      strip.removeEventListener('touchstart', pause);
+      strip.removeEventListener('touchend', resume);
+    };
+  }, [startAutoplay, stopAutoplay]);
+
+  return (
+    <section className="mk-showcase">
+      <div className="mk-showcase-head">
+        <div className="mk-sec-label lt rev">Asli app, asli screenshots</div>
+        <h2 className="mk-sec-h2 lt rev" style={{ fontSize: 'clamp(26px, 4vw, 40px)' }}>
+          Dekho app kaisi dikhti hai
+        </h2>
+      </div>
+      <div className="mk-showcase-strip" ref={stripRef}>
+        {SCREENS.map((s, i) => (
+          <div
+            key={s.label}
+            className="mk-showcase-item"
+            ref={(el) => { itemRefs.current[i] = el; }}
+          >
+            <div className="mk-showcase-phone">
+              <div className="mk-showcase-notch" />
+              <img src={s.src} alt={`MilaKya ${s.label} screen`}
+                className="mk-showcase-img" loading="lazy" decoding="async" />
+            </div>
+            <div className="mk-showcase-pill">{s.pill}</div>
+            <div className="mk-showcase-label">{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mk-showcase-hint">← Swipe to explore all screens →</p>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // FeatureHub — extracted so we can attach the scroll-observer refs cleanly
 // ─────────────────────────────────────────────────────────────────────────────
 function FeatureHub() {
   const [activeFeature, setActiveFeature] = useState(0);
-  // Refs for the 6 card elements — used by IntersectionObserver on mobile
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const isMobile = useRef(false);
+  const rafRef = useRef<number | null>(null);
+  const commitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef(0);
+  const activeRef = useRef(0); // mirrors activeFeature for use inside the scroll loop
 
   useEffect(() => {
-    // Track if we're on mobile
     const mql = window.matchMedia('(max-width: 900px)');
-    isMobile.current = mql.matches;
-    const onChange = (e: MediaQueryListEvent) => { isMobile.current = e.matches; };
-    mql.addEventListener('change', onChange);
+    if (!mql.matches) return; // desktop: click only, no scroll-driven switching
 
-    // IntersectionObserver: when a card scrolls into the middle third of the
-    // viewport on mobile, make it the active feature and update the phone.
-    let obs: IntersectionObserver | null = null;
-    try {
-      obs = new IntersectionObserver(
-        (entries) => {
-          if (!isMobile.current) return; // desktop uses click only
-          // Find the most-intersecting entry
-          let best: { idx: number; ratio: number } | null = null;
-          entries.forEach((e) => {
-            const idx = cardRefs.current.indexOf(e.target as HTMLButtonElement);
-            if (idx === -1) return;
-            if (!best || e.intersectionRatio > best.ratio) {
-              best = { idx, ratio: e.intersectionRatio };
-            }
-          });
-          if (best && (best as { idx: number; ratio: number }).ratio > 0.45) {
-            setActiveFeature((best as { idx: number; ratio: number }).idx);
-          }
-        },
-        // rootMargin narrows the trigger zone to the middle of the screen
-        {
-          threshold: [0, 0.25, 0.5, 0.75, 1],
-          rootMargin: '-25% 0px -25% 0px',
-        }
-      );
-      cardRefs.current.forEach((el) => el && obs!.observe(el));
-    } catch {
-      // Fallback: do nothing (click still works)
-    }
+    const MAX_DIST    = 220; // px — ignore cards too far from the target line
+    const HYSTERESIS  = 36;  // px — a challenger must beat the incumbent by this much
+    const SETTLE_MS   = 90;  // debounce before committing a switch
+
+    const findActive = () => {
+      const target = window.innerHeight * 0.40; // golden-third trigger line
+      let bestDist = Infinity;
+      let bestIdx = activeRef.current;
+      let currentDist = Infinity;
+
+      cardRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        const centre = r.top + r.height / 2;
+        const dist = Math.abs(centre - target);
+        if (i === activeRef.current) currentDist = dist;
+        if (dist < bestDist) { bestDist = dist; bestIdx = i; }
+      });
+
+      if (bestDist > MAX_DIST) return; // nothing close enough — keep current
+
+      // Hysteresis: a challenger only wins if it clearly beats the incumbent.
+      // This is what stops two near-equidistant cards from flip-flopping.
+      if (bestIdx === activeRef.current) {
+        pendingRef.current = bestIdx;
+        return;
+      }
+      if (currentDist - bestDist < HYSTERESIS) return;
+
+      if (pendingRef.current !== bestIdx) {
+        pendingRef.current = bestIdx;
+        if (commitRef.current) clearTimeout(commitRef.current);
+        commitRef.current = setTimeout(() => {
+          activeRef.current = pendingRef.current;
+          setActiveFeature(pendingRef.current);
+        }, SETTLE_MS);
+      }
+    };
+
+    const onScroll = () => {
+      if (rafRef.current !== null) return;
+      rafRef.current = requestAnimationFrame(() => {
+        findActive();
+        rafRef.current = null;
+      });
+    };
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+    findActive(); // run once on mount
+
+    const handleMql = (e: MediaQueryListEvent) => {
+      if (!e.matches) window.removeEventListener('scroll', onScroll);
+    };
+    mql.addEventListener('change', handleMql);
 
     return () => {
-      obs?.disconnect();
-      mql.removeEventListener('change', onChange);
+      window.removeEventListener('scroll', onScroll);
+      mql.removeEventListener('change', handleMql);
+      if (commitRef.current) clearTimeout(commitRef.current);
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
     };
   }, []);
+
+  const handleSelect = (i: number) => {
+    activeRef.current = i;
+    pendingRef.current = i;
+    setActiveFeature(i);
+  };
 
   const activeF = FEATURES[activeFeature];
 
@@ -945,7 +1187,7 @@ function FeatureHub() {
               ref={(el) => { cardRefs.current[i] = el; }}
               aria-pressed={activeFeature === i}
               className={`mk-hub-card${activeFeature === i ? ' active' : ''}`}
-              onClick={() => setActiveFeature(i)}
+              onClick={() => handleSelect(i)}
             >
               <div className="mk-hub-ico" style={{ background: f.bg, color: f.color }}>
                 {f.ico}
@@ -969,7 +1211,7 @@ function FeatureHub() {
                 ref={(el) => { cardRefs.current[idx] = el; }}
                 aria-pressed={activeFeature === idx}
                 className={`mk-hub-card${activeFeature === idx ? ' active' : ''}`}
-                onClick={() => setActiveFeature(idx)}
+                onClick={() => handleSelect(idx)}
               >
                 <div className="mk-hub-ico" style={{ background: f.bg, color: f.color }}>
                   {f.ico}
@@ -980,6 +1222,155 @@ function FeatureHub() {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CtaPhone — rises from below once scrolled into view (desktop only; the
+// column wrapping it is hidden on mobile via CSS)
+// ─────────────────────────────────────────────────────────────────────────────
+function CtaPhone() {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let obs: IntersectionObserver | null = null;
+    try {
+      obs = new IntersectionObserver(([entry]) => {
+        if (entry.isIntersecting) {
+          el.classList.add('in-view');
+          obs?.disconnect();
+        }
+      }, { threshold: 0.6 });
+      obs.observe(el);
+    } catch {
+      el.classList.add('in-view');
+    }
+    return () => obs?.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref} className="mk-fcta-phone-frame">
+      <div className="mk-fcta-dynamic-island" />
+      <div className="mk-fcta-screen">
+        <div className="mk-fcta-screen-label">Scan the QR code to download the app</div>
+        <div className="mk-fcta-qrbox">
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&bgcolor=ffffff&color=1a0e08&data=${encodeURIComponent(APP_URL)}`}
+            alt="Scan to install MilaKya"
+            style={{ width: 200, height: 200, display: 'block', borderRadius: 4 }}
+            loading="lazy" decoding="async"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HeroPhones — scroll-scrubbed: distance between the two phones tracks scroll
+// position directly. Scroll down and they slide together from their own
+// sides; scroll back up to the top and they slide back apart. Not a one-time
+// entrance — it's reversible at any point. Same behaviour on mobile/desktop.
+// ─────────────────────────────────────────────────────────────────────────────
+function HeroPhones() {
+  const ph1Ref = useRef<HTMLDivElement>(null);
+  const ph2Ref = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // Static resting pose for reduced-motion users
+      if (ph1Ref.current) { ph1Ref.current.style.opacity = '1'; ph1Ref.current.style.transform = 'rotate(-6deg)'; }
+      if (ph2Ref.current) { ph2Ref.current.style.opacity = '1'; ph2Ref.current.style.transform = 'rotate(4.5deg)'; }
+      return;
+    }
+
+    const apply = (p: number) => {
+      const w1 = ph1Ref.current?.offsetWidth ?? 180;
+      const w2 = ph2Ref.current?.offsetWidth ?? 180;
+      const offset1 = (1 - p) * w1 * 1.3;
+      const offset2 = (1 - p) * w2 * 1.3;
+      const opacity  = 0.25 + 0.75 * p;
+      if (ph1Ref.current) {
+        ph1Ref.current.style.transform = `translateX(${-offset1}px) rotate(-6deg)`;
+        ph1Ref.current.style.opacity   = String(opacity);
+      }
+      if (ph2Ref.current) {
+        ph2Ref.current.style.transform = `translateX(${offset2}px) rotate(4.5deg)`;
+        ph2Ref.current.style.opacity   = String(opacity);
+      }
+    };
+
+    let currentP  = 0;   // eased/displayed value
+    let lastPaint = -1;  // skip frame if nothing changed
+
+    const tick = () => {
+      rafRef.current = requestAnimationFrame(tick);
+
+      // ── KEY FIX ──────────────────────────────────────────────────────
+      // getBoundingClientRect().top is relative to the *viewport*, not the
+      // document. It reflects actual visual scrolling regardless of whether
+      // window, a Next.js layout div, or any other container is scrolling.
+      // We don't need a scroll event at all — just poll every frame.
+      const heroEl = ph1Ref.current?.closest('.mk-hero') as HTMLElement | null;
+      if (!heroEl) return;
+
+      const heroTop   = heroEl.getBoundingClientRect().top;
+      // heroTop ≈ 0 when the page is at the top (hero fills the viewport).
+      // heroTop goes negative as the user scrolls down.
+      const scrolled  = Math.max(-heroTop, 0);               // 0 → positive
+      const maxScroll = window.innerHeight * 0.7;
+      const targetP   = Math.min(scrolled / maxScroll, 1);
+      // ─────────────────────────────────────────────────────────────────
+
+      // Gentle ease toward target (same spring feel as before)
+      currentP += (targetP - currentP) * 0.18;
+      if (Math.abs(targetP - currentP) < 0.001) currentP = targetP;
+
+      // Skip paint if value hasn't meaningfully changed
+      if (Math.abs(currentP - lastPaint) < 0.0005) return;
+      lastPaint = currentP;
+      apply(currentP);
+    };
+
+    apply(0);                            // start phones fully "apart"
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  return (
+    <div className="mk-phones">
+      <div ref={ph1Ref} className="mk-phone mk-ph1">
+        <div className="mk-notch" />
+        <div className="mk-pscreen">
+          <img
+            src="/screenshots/screen-home.png"
+            alt="MilaKya Home — Apni cheezein"
+            className="mk-phone-img"
+            loading="eager"
+            fetchPriority="high"
+            decoding="async"
+          />
+        </div>
+      </div>
+      <div ref={ph2Ref} className="mk-phone mk-ph2">
+        <div className="mk-notch" />
+        <div className="mk-pscreen">
+          <img
+            src="/screenshots/screen-scan.png"
+            alt="MilaKya Scan — AI photo scan"
+            className="mk-phone-img"
+            loading="eager"
+            decoding="async"
+          />
+        </div>
       </div>
     </div>
   );
@@ -1067,22 +1458,7 @@ export default function LandingPage() {
           </a>
         </div>
 
-        <div className="mk-phones hero-in" style={{ animationDelay: '0.45s' }}>
-          <div className="mk-phone mk-ph1">
-            <div className="mk-notch" />
-            <div className="mk-pscreen">
-              <img src="/screenshots/screen-home.png" alt="MilaKya Home — Apni cheezein"
-                className="mk-phone-img" loading="eager" fetchPriority="high" decoding="async" />
-            </div>
-          </div>
-          <div className="mk-phone mk-ph2">
-            <div className="mk-notch" />
-            <div className="mk-pscreen">
-              <img src="/screenshots/screen-scan.png" alt="MilaKya Scan — AI photo scan"
-                className="mk-phone-img" loading="eager" decoding="async" />
-            </div>
-          </div>
-        </div>
+        <HeroPhones />
       </section>
 
       {/* ── PROOF BAR ── */}
@@ -1098,28 +1474,7 @@ export default function LandingPage() {
       <MkCurve bg="#1A0E08" fill="var(--w)" />
 
       {/* ── APP SHOWCASE ── */}
-      <section className="mk-showcase">
-        <div className="mk-showcase-head">
-          <div className="mk-sec-label lt rev">Asli app, asli screenshots</div>
-          <h2 className="mk-sec-h2 lt rev" style={{ fontSize: 'clamp(26px, 4vw, 40px)' }}>
-            Dekho app kaisi dikhti hai
-          </h2>
-        </div>
-        <div className="mk-showcase-strip">
-          {SCREENS.map((s) => (
-            <div key={s.label} className="mk-showcase-item">
-              <div className="mk-showcase-phone">
-                <div className="mk-showcase-notch" />
-                <img src={s.src} alt={`MilaKya ${s.label} screen`}
-                  className="mk-showcase-img" loading="lazy" decoding="async" />
-              </div>
-              <div className="mk-showcase-pill">{s.pill}</div>
-              <div className="mk-showcase-label">{s.label}</div>
-            </div>
-          ))}
-        </div>
-        <p className="mk-showcase-hint">← Swipe to explore all screens →</p>
-      </section>
+      <Showcase />
 
       <div style={{ background: '#1A0E08', display: 'flex', justifyContent: 'center', padding: '0 24px' }}>
         <div style={{ height: '1px', width: '100%', maxWidth: 900,
@@ -1146,7 +1501,17 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-          <p className="mk-prob-hint">← Swipe karke dekho →</p>
+
+          {/* Mobile-only: full-bleed story stack (desktop grid above is untouched) */}
+          <div className="mk-prob-stories">
+            {PROBLEMS.map(({ Icon, title, text }) => (
+              <div key={title} className="mk-story-card">
+                <div className="mk-story-bubble"><Icon size={12} /></div>
+                <div className="mk-story-title">{title}</div>
+                <div className="mk-story-text">{text}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -1212,37 +1577,7 @@ export default function LandingPage() {
             </div>
 
             <div className="mk-fcta-phonecol">
-              <div style={{
-                width: 340, background: '#1A1A1A',
-                borderRadius: '48px 48px 0 0', padding: '10px 10px 0',
-                boxShadow: '0 -24px 80px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.08)',
-                position: 'relative',
-              }}>
-                <div style={{
-                  position: 'absolute', top: 20, left: '50%', transform: 'translateX(-50%)',
-                  width: 100, height: 28, background: '#000', borderRadius: 99, zIndex: 3
-                }} />
-                <div style={{
-                  width: '100%', borderRadius: '40px 40px 0 0', overflow: 'hidden',
-                  background: '#fff', display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', padding: '72px 36px 44px',
-                }}>
-                  <div style={{
-                    fontFamily: "'Outfit', sans-serif", fontSize: 22, fontWeight: 700,
-                    color: '#666', letterSpacing: -1, lineHeight: 1.15, marginBottom: 16,
-                  }}>
-                    Scan the QR code to download the app
-                  </div>
-                  <div className="mk-fcta-qrbox">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&bgcolor=ffffff&color=1a0e08&data=${encodeURIComponent(APP_URL)}`}
-                      alt="Scan to install MilaKya"
-                      style={{ width: 200, height: 200, display: 'block', borderRadius: 4 }}
-                      loading="lazy" decoding="async"
-                    />
-                  </div>
-                </div>
-              </div>
+              <CtaPhone />
             </div>
           </div>
         </section>
@@ -1252,45 +1587,88 @@ export default function LandingPage() {
 
       {/* ── FOOTER ── */}
       <footer className="mk-footer">
-        <div className="mk-foot-top">
-          <div className="mk-foot-brand">
-            <a href="/" className="mk-foot-logo" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <img src="/icon.png" alt="" width={32} height={32} loading="lazy" decoding="async"
-                style={{ width: 32, height: 32, borderRadius: 8, display: 'block' }} />
-              <span>{`Mila`}<em>{`Kya`}</em></span>
-            </a>
-            <p className="mk-foot-tagline">
-              Apna saman, apni jagah.<br />
-              Built for India's multi-home generation.
-            </p>
-            <div className="mk-foot-social">
-              <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer" className="mk-foot-sico" aria-label="Instagram">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                </svg>
+        <div className="mk-foot-desktop">
+          <div className="mk-foot-top">
+            <div className="mk-foot-brand">
+              <a href="/" className="mk-foot-logo" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <img src="/icon.png" alt="" width={32} height={32} loading="lazy" decoding="async"
+                  style={{ width: 32, height: 32, borderRadius: 8, display: 'block' }} />
+                <span>{`Mila`}<em>{`Kya`}</em></span>
               </a>
-              <a href={LINKEDIN} target="_blank" rel="noopener noreferrer" className="mk-foot-sico" aria-label="LinkedIn">
-                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-                </svg>
-              </a>
+              <p className="mk-foot-tagline">
+                Apna saman, apni jagah.<br />
+                Built for India's multi-home generation.
+              </p>
+              <div className="mk-foot-social">
+                <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer" className="mk-foot-sico" aria-label="Instagram">
+                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                  </svg>
+                </a>
+                <a href={LINKEDIN} target="_blank" rel="noopener noreferrer" className="mk-foot-sico" aria-label="LinkedIn">
+                  <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                  </svg>
+                </a>
+              </div>
+            </div>
+            <div className="mk-foot-col">
+              <h4>Legal</h4>
+              <a href={PRIVACY_URL}>Privacy Policy</a>
+              <a href={TERMS_URL}>Terms of Service</a>
+            </div>
+            <div className="mk-foot-col">
+              <h4>Contact</h4>
+              <a href="mailto:milakya.app@gmail.com">Email</a>
+              <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer">Instagram</a>
+              <a href={LINKEDIN} target="_blank" rel="noopener noreferrer">LinkedIn</a>
             </div>
           </div>
-          <div className="mk-foot-col">
-            <h4>Legal</h4>
-            <a href={PRIVACY_URL}>Privacy Policy</a>
-            <a href={TERMS_URL}>Terms of Service</a>
-          </div>
-          <div className="mk-foot-col">
-            <h4>Contact</h4>
-            <a href="mailto:milakya.app@gmail.com">Email</a>
-            <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer">Instagram</a>
-            <a href={LINKEDIN} target="_blank" rel="noopener noreferrer">LinkedIn</a>
+          <div className="mk-foot-bottom">
+            <span>© 2026 MilaKya. All rights reserved.</span>
+            <span className="mk-foot-flag">🇮🇳 Made in India · Built for Bharat</span>
           </div>
         </div>
-        <div className="mk-foot-bottom">
-          <span>© 2026 MilaKya. All rights reserved.</span>
-          <span className="mk-foot-flag">🇮🇳 Made in India · Built for Bharat</span>
+
+        {/* Mobile-only: compact pill-style footer */}
+        <div className="mk-foot-mobile">
+          <div className="mk-mfoot-brand">
+            <img src="/icon.png" alt="" width={28} height={28} loading="lazy" decoding="async"
+              style={{ width: 28, height: 28, borderRadius: 7 }} />
+            <a href="/" className="mk-mfoot-logo">{`Mila`}<em>{`Kya`}</em></a>
+          </div>
+          <p className="mk-mfoot-tagline">Apna saman, apni jagah · Built for Bharat</p>
+
+          <a href={APP_URL} target="_blank" rel="noopener noreferrer" className="mk-mfoot-cta">
+            <Download size={16} strokeWidth={2.5} /> Free mein Install Karo
+          </a>
+
+          <div className="mk-mfoot-links">
+            <a href={PRIVACY_URL} className="mk-mfoot-link">Privacy</a>
+            <a href={TERMS_URL} className="mk-mfoot-link">Terms</a>
+            <a href="mailto:milakya.app@gmail.com" className="mk-mfoot-link">
+              <Mail size={11} /> Email
+            </a>
+          </div>
+
+          <div className="mk-mfoot-social">
+            <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer" className="mk-mfoot-sico" aria-label="Instagram">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+              </svg>
+            </a>
+            <a href={LINKEDIN} target="_blank" rel="noopener noreferrer" className="mk-mfoot-sico" aria-label="LinkedIn">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+              </svg>
+            </a>
+          </div>
+
+          <div className="mk-mfoot-divider" />
+          <div className="mk-mfoot-bottom">
+            <span>© 2026 MilaKya</span>
+            <span>🇮🇳 Made in India</span>
+          </div>
         </div>
       </footer>
     </>
