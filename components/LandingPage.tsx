@@ -49,7 +49,7 @@ html { scroll-behavior: smooth; }
 
 .mk-wrap { max-width: 1100px; margin: 0 auto; }
 
-.mk-prob, .mk-how, .mk-showcase {
+.mk-prob, .mk-how {
   content-visibility: auto;
   contain-intrinsic-size: auto 700px;
 }
@@ -567,6 +567,55 @@ html { scroll-behavior: smooth; }
   .mk-showcase-phone { width: 160px; }
   .mk-showcase-strip { padding: 16px 24px 32px; gap: 14px; }
 }
+  /* ── SHOWCASE: mobile scroll-driven ── */
+.mk-sc-mobile  { display: none; }
+.mk-sc-desktop { display: block; padding: 80px 0 60px; }
+
+@media (max-width: 640px) {
+  .mk-showcase {
+    padding: 0;
+    /* Tall enough for one full scroll per screen: (N screens + 1) × 100dvh */
+    height: 700vh;
+    height: 700dvh;
+    /* CRITICAL: 'overflow: hidden' breaks position: sticky on children */
+    overflow: visible;
+    /* Must render fully even when section is offscreen */
+    content-visibility: visible;
+  }
+
+  .mk-sc-mobile  { display: block; height: 100%; }
+  .mk-sc-desktop { display: none;  }
+
+  .mk-sc-sticky {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #1A0E08;
+    padding: 70px 20px 24px;
+    z-index: 1;
+  }
+
+  .mk-sc-dots {
+    display: flex; gap: 6px; margin-top: 20px;
+  }
+  .mk-sc-dot {
+    height: 5px; width: 5px; border-radius: 3px;
+    background: rgba(250,246,240,0.2);
+    transition: width 0.3s ease, background 0.3s ease;
+  }
+  .mk-sc-dot.active {
+    width: 20px; background: var(--t);
+  }
+  .mk-sc-hint {
+    font-size: 11px; color: rgba(250,246,240,0.22);
+    letter-spacing: 0.04em; margin-top: 14px; text-align: center;
+  }
+}
 
 /* ── CURVE DIVIDERS ── */
 .mk-curve { display: block; width: 100%; height: 48px; line-height: 0; overflow: hidden; }
@@ -981,93 +1030,102 @@ function MkCurve({ bg, fill, flip }: { bg: string; fill: string; flip?: boolean 
 // untouched and keeps the original manual horizontal-swipe behaviour.
 // ─────────────────────────────────────────────────────────────────────────────
 function Showcase() {
-  const stripRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const indexRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pausedRef = useRef(false);
-  const resumeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const [activeScreen, setActiveScreen] = useState(0);
 
-  const startAutoplay = useCallback(() => {
-    if (timerRef.current) return;
-    timerRef.current = setInterval(() => {
-      if (pausedRef.current) return;
-      indexRef.current = (indexRef.current + 1) % SCREENS.length;
-      itemRefs.current[indexRef.current]?.scrollIntoView({
-        behavior: 'smooth', inline: 'center', block: 'nearest',
-      });
-    }, 2200);
-  }, []);
-
-  const stopAutoplay = useCallback(() => {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-  }, []);
-
+  // Mobile only: poll getBoundingClientRect every rAF frame.
+  // Works regardless of which element is the scroll container (Next.js safe).
   useEffect(() => {
-    const mql = window.matchMedia('(max-width: 640px)');
-    if (!mql.matches) return; // desktop: native swipe only, nothing else runs
+    if (!window.matchMedia('(max-width: 640px)').matches) return;
 
-    const strip = stripRef.current;
-    if (!strip) return;
+    let rafId: number;
+    let lastIdx = -1;
 
-    let obs: IntersectionObserver | null = null;
-    try {
-      obs = new IntersectionObserver(([entry]) => {
-        if (entry.isIntersecting) startAutoplay();
-        else stopAutoplay();
-      }, { threshold: 0.4 });
-      obs.observe(strip);
-    } catch {
-      startAutoplay();
-    }
+    const tick = () => {
+      rafId = requestAnimationFrame(tick);
+      const section = sectionRef.current;
+      if (!section) return;
 
-    // Pause while the user is actively swiping, resume shortly after they let go
-    const pause = () => {
-      pausedRef.current = true;
-      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
+      const rect        = section.getBoundingClientRect();
+      const scrollableH = section.offsetHeight - window.innerHeight;
+      if (scrollableH <= 0) return;
+
+      // How far the section top has moved above the viewport top
+      const scrolledIn = Math.max(0, -rect.top);
+      const progress   = Math.min(scrolledIn / scrollableH, 0.9999);
+      const idx        = Math.floor(progress * SCREENS.length);
+
+      if (idx !== lastIdx) { lastIdx = idx; setActiveScreen(idx); }
     };
-    const resume = () => {
-      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
-      resumeTimeoutRef.current = setTimeout(() => { pausedRef.current = false; }, 2600);
-    };
-    strip.addEventListener('touchstart', pause, { passive: true });
-    strip.addEventListener('touchend', resume, { passive: true });
 
-    return () => {
-      obs?.disconnect();
-      stopAutoplay();
-      if (resumeTimeoutRef.current) clearTimeout(resumeTimeoutRef.current);
-      strip.removeEventListener('touchstart', pause);
-      strip.removeEventListener('touchend', resume);
-    };
-  }, [startAutoplay, stopAutoplay]);
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  const s = SCREENS[activeScreen];
 
   return (
-    <section className="mk-showcase">
-      <div className="mk-showcase-head">
-        <div className="mk-sec-label lt rev">Asli app, asli screenshots</div>
-        <h2 className="mk-sec-h2 lt rev" style={{ fontSize: 'clamp(26px, 4vw, 40px)' }}>
-          Dekho app kaisi dikhti hai
-        </h2>
-      </div>
-      <div className="mk-showcase-strip" ref={stripRef}>
-        {SCREENS.map((s, i) => (
-          <div
-            key={s.label}
-            className="mk-showcase-item"
-            ref={(el) => { itemRefs.current[i] = el; }}
-          >
-            <div className="mk-showcase-phone">
-              <div className="mk-showcase-notch" />
-              <img src={s.src} alt={`MilaKya ${s.label} screen`}
-                className="mk-showcase-img" loading="lazy" decoding="async" />
-            </div>
-            <div className="mk-showcase-pill">{s.pill}</div>
-            <div className="mk-showcase-label">{s.label}</div>
+    <section className="mk-showcase" ref={sectionRef}>
+
+      {/* ── MOBILE: sticky single-phone, scroll-driven ── */}
+      <div className="mk-sc-mobile">
+        <div className="mk-sc-sticky">
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <div className="mk-sec-label lt">Asli app, asli screenshots</div>
+            <h2 className="mk-sec-h2 lt" style={{ fontSize: 'clamp(22px, 5vw, 32px)', marginBottom: 0 }}>
+              Dekho app kaisi dikhti hai
+            </h2>
           </div>
-        ))}
+
+          {/* key= forces React to remount the img, triggering the fade-in */}
+          <div className="mk-showcase-phone" style={{ width: 185, flexShrink: 0 }}>
+            <div className="mk-showcase-notch" />
+            <img
+              key={activeScreen}
+              src={s.src}
+              alt={`MilaKya ${s.label} screen`}
+              className="mk-showcase-img mk-hub-img-fade"
+              loading="eager"
+              decoding="async"
+            />
+          </div>
+
+          <div className="mk-showcase-pill" style={{ marginTop: 14 }}>{s.pill}</div>
+          <div className="mk-showcase-label">{s.label}</div>
+
+          {/* Pill-style progress dots */}
+          <div className="mk-sc-dots">
+            {SCREENS.map((_, i) => (
+              <div key={i} className={`mk-sc-dot${i === activeScreen ? ' active' : ''}`} />
+            ))}
+          </div>
+          <p className="mk-sc-hint">↓ scroll to explore all screens</p>
+        </div>
       </div>
-      <p className="mk-showcase-hint">← Swipe to explore all screens →</p>
+
+      {/* ── DESKTOP: original horizontal swipe strip (unchanged) ── */}
+      <div className="mk-sc-desktop">
+        <div className="mk-showcase-head">
+          <div className="mk-sec-label lt rev">Asli app, asli screenshots</div>
+          <h2 className="mk-sec-h2 lt rev" style={{ fontSize: 'clamp(26px, 4vw, 40px)' }}>
+            Dekho app kaisi dikhti hai
+          </h2>
+        </div>
+        <div className="mk-showcase-strip">
+          {SCREENS.map((sc) => (
+            <div key={sc.label} className="mk-showcase-item">
+              <div className="mk-showcase-phone">
+                <div className="mk-showcase-notch" />
+                <img src={sc.src} alt={`MilaKya ${sc.label} screen`}
+                  className="mk-showcase-img" loading="lazy" decoding="async" />
+              </div>
+              <div className="mk-showcase-pill">{sc.pill}</div>
+              <div className="mk-showcase-label">{sc.label}</div>
+            </div>
+          ))}
+        </div>
+        <p className="mk-showcase-hint">← Swipe to explore all screens →</p>
+      </div>
     </section>
   );
 }
